@@ -31,15 +31,17 @@ jobs:
         run: |
           PROJECT_ROOT=$(dirname "$(find my_project -name "settings.gradle*" | head -n 1)")
           cd "$PROJECT_ROOT"
+          
+          # 1. API Key Setup
           echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
           
-          # Fix for KSP Error
-          mkdir -p .idea
-          echo "ksp.allow.all.target.configuration=false" > gradle.properties
+          # 2. Fix RAM (Memory) & Headless Error
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Djava.awt.headless=true" >> gradle.properties
           
-          # Fix for Keystore Error (Remove signing config requirement)
+          # 3. Fix Keystore Error
           sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' app/build.gradle.kts
           
+          # 4. Start Build
           gradle assembleDebug --stacktrace
 
       - name: Upload APK
