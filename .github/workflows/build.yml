@@ -14,7 +14,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Unzip Project File
-        run: unzip -q "*.zip" -d my_project
+        run: |
+          ZIP_FILE=$(ls *.zip | head -n 1)
+          unzip -q "$ZIP_FILE" -d my_project
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -27,12 +29,10 @@ jobs:
 
       - name: Find and Build Project
         run: |
-          GRADLE_DIR=$(dirname "$(find my_project -name "gradlew" | head -n 1)")
-          echo "Found Gradle in: $GRADLE_DIR"
-          cd "$GRADLE_DIR"
+          PROJECT_ROOT=$(dirname "$(find my_project -name "settings.gradle*" | head -n 1)")
+          cd "$PROJECT_ROOT"
           echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
