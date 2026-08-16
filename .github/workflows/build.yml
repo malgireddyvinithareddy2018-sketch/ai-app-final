@@ -32,20 +32,21 @@ jobs:
           PROJECT_ROOT=$(dirname "$(find my_project -name "settings.gradle*" | head -n 1)")
           cd "$PROJECT_ROOT"
           
-          # 1. API Key Setup
           echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
           
-          # 2. Fix RAM (Memory) & Headless Error
-          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Djava.awt.headless=true" >> gradle.properties
+          # Memory, Headless & Performance Fixes
+          echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Djava.awt.headless=true -Dkotlin.daemon.jvm.options=-Xmx2g" >> gradle.properties
+          echo "org.gradle.parallel=true" >> gradle.properties
           
-          # 3. Fix Keystore Error
+          # Keystore Error Fix
           sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' app/build.gradle.kts
           
-          # 4. Start Build
-          gradle assembleDebug --stacktrace
+          # Build with NO DAEMON to prevent memory crash
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: my_project/**/app/build/outputs/apk/debug/*.apk
+
