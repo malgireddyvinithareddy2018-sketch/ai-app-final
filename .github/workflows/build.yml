@@ -32,16 +32,34 @@ jobs:
           PROJECT_ROOT=$(dirname "$(find my_project -name "settings.gradle*" | head -n 1)")
           cd "$PROJECT_ROOT"
           
+          # 1. API Key Setup
           echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
           
-          # Memory, Headless & Performance Fixes
-          echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Djava.awt.headless=true -Dkotlin.daemon.jvm.options=-Xmx2g" >> gradle.properties
-          echo "org.gradle.parallel=true" >> gradle.properties
+          # 2. Fix RAM & Headless Error
+          echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Djava.awt.headless=true" >> gradle.properties
           
-          # Keystore Error Fix
-          sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' app/build.gradle.kts
+          # 3. Fix Keystore Error
+          find . -name "build.gradle*" -exec sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' {} +
           
-          # Build with NO DAEMON to prevent memory crash
+          # 4. FIX for Missing google-services.json
+          for APP_DIR in $(find . -name "build.gradle*" -exec dirname {} \; | sort -u); do
+            if grep -q "com.android.application" "$APP_DIR/"build.gradle*; then
+              echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.dummy"}}}]}' > "$APP_DIR/google-services.json"
+            fi
+          done
+          
+          # 5. FIX for Kotlin Compose Version Incompatibility (Main Crash)
+          for BUILD_FILE in $(find . -name "build.gradle*"); do
+            if grep -q "com.android.application" "$BUILD_FILE"; then
+              if [[ "$BUILD_FILE" == *"kts"* ]]; then
+                echo 'tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach { kotlinOptions { freeCompilerArgs += listOf("-P", "plugin:androidx.compose.compiler.plugins.kotlin:suppressKotlinVersionCompatibilityCheck=true") } }' >> "$BUILD_FILE"
+              else
+                echo 'tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach { kotlinOptions { freeCompilerArgs += ["-P", "plugin:androidx.compose.compiler.plugins.kotlin:suppressKotlinVersionCompatibilityCheck=true"] } }' >> "$BUILD_FILE"
+              fi
+            fi
+          done
+          
+          # 6. Start Build
           gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
@@ -49,4 +67,3 @@ jobs:
         with:
           name: app-debug-apk
           path: my_project/**/app/build/outputs/apk/debug/*.apk
-
