@@ -34,13 +34,16 @@ jobs:
           
           # 1. Base Setup
           echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
-          echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Djava.awt.headless=true" >> gradle.properties
           
-          # 2. BULLETPROOF Fix for google-services.json
+          # 2. FORCE FIX for KSP AWT NullPointerException
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Djava.awt.headless=true" > ~/.gradle/gradle.properties
+          echo "ksp.incremental=false" >> ~/.gradle/gradle.properties
+          
+          # 3. FIX for google-services.json
           APP_DIR=$(dirname "$(find . -name "build.gradle*" -exec grep -l "com.android.application" {} + | head -n 1)")
           if [ -z "$APP_DIR" ]; then APP_DIR="app"; fi
           mkdir -p "$APP_DIR"
-          
           cat << 'EOF' > "$APP_DIR/google-services.json"
           {
             "project_info": { "project_number": "123456789012", "project_id": "dummy-project" },
@@ -54,27 +57,30 @@ jobs:
           }
           EOF
           
-          # 3. Fix Keystore Error
+          # 4. FIX for Keystore Error
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           find . -name "build.gradle*" -exec sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' {} +
           
-          # 4. Fix Kotlin Compose Error
-          cat << 'EOF' > compose-fix.gradle
+          # 5. FORCE FIX for Kotlin Compose (AbstractMethodError)
+          find . -name "build.gradle*" -type f -exec sed -i -E 's/kotlinCompilerExtensionVersion[[:space:]]*=?[[:space:]]*["'\''][0-9.]+["'\'']/kotlinCompilerExtensionVersion = "1.5.10"/g' {} +
+          if [ -f gradle/libs.versions.toml ]; then
+            sed -i -E 's/compose-compiler[[:space:]]*=[[:space:]]*["'\''][0-9.]+["'\'']/compose-compiler = "1.5.10"/g' gradle/libs.versions.toml
+          fi
+          
+          cat << 'EOF' > override.gradle
           allprojects {
-              afterEvaluate { project ->
-                  project.tasks.configureEach { task ->
-                      if (task.name.startsWith("compile") && task.name.endsWith("Kotlin")) {
-                          try {
-                              task.kotlinOptions.freeCompilerArgs += ["-P", "plugin:androidx.compose.compiler.plugins.kotlin:suppressKotlinVersionCompatibilityCheck=true"]
-                          } catch (Exception e) {}
+              configurations.all {
+                  resolutionStrategy.eachDependency { details ->
+                      if (details.requested.group == 'androidx.compose.compiler' && details.requested.name == 'compiler') {
+                          details.useVersion '1.5.10'
                       }
                   }
               }
           }
           EOF
           
-          # 5. Start Build
-          gradle assembleDebug --no-daemon --stacktrace --init-script compose-fix.gradle
+          # 6. Start Build with all forced fixes
+          gradle assembleDebug --no-daemon --stacktrace --init-script override.gradle
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
