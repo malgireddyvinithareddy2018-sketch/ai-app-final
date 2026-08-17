@@ -36,9 +36,23 @@ jobs:
           echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
           echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Djava.awt.headless=true" >> gradle.properties
           
-          # 2. EXACT Fix for google-services.json (With your real package name)
-          mkdir -p app
-          echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.aistudio.aivideocreator.hub.v3x"}}}]}' > app/google-services.json
+          # 2. BULLETPROOF Fix for google-services.json
+          APP_DIR=$(dirname "$(find . -name "build.gradle*" -exec grep -l "com.android.application" {} + | head -n 1)")
+          if [ -z "$APP_DIR" ]; then APP_DIR="app"; fi
+          mkdir -p "$APP_DIR"
+          
+          cat << 'EOF' > "$APP_DIR/google-services.json"
+          {
+            "project_info": { "project_number": "123456789012", "project_id": "dummy-project" },
+            "client": [ {
+              "client_info": { "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890", "android_client_info": { "package_name": "com.aistudio.aivideocreator.hub.v3x" } },
+              "oauth_client": [],
+              "api_key": [ { "current_key": "AIzaSyDummyKeyDummyKeyDummyKeyDummyKeyD" } ],
+              "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+            } ],
+            "configuration_version": "1"
+          }
+          EOF
           
           # 3. Fix Keystore Error
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
