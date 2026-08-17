@@ -36,14 +36,15 @@ jobs:
           echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
           echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Djava.awt.headless=true" >> gradle.properties
           
-          # 2. 100% Fix for google-services.json
+          # 2. EXACT Fix for google-services.json (With your real package name)
           mkdir -p app
-          echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.dummy"}}}]}' > app/google-services.json
+          echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.aistudio.aivideocreator.hub.v3x"}}}]}' > app/google-services.json
           
-          # 3. 100% Fix for Keystore Error (Generate a real dummy key)
+          # 3. Fix Keystore Error
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          find . -name "build.gradle*" -exec sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' {} +
           
-          # 4. 100% Fix for Kotlin Compose Error (Forced Init Script)
+          # 4. Fix Kotlin Compose Error
           cat << 'EOF' > compose-fix.gradle
           allprojects {
               afterEvaluate { project ->
@@ -51,16 +52,14 @@ jobs:
                       if (task.name.startsWith("compile") && task.name.endsWith("Kotlin")) {
                           try {
                               task.kotlinOptions.freeCompilerArgs += ["-P", "plugin:androidx.compose.compiler.plugins.kotlin:suppressKotlinVersionCompatibilityCheck=true"]
-                          } catch (Exception e) {
-                              // Ignore if options are not available
-                          }
+                          } catch (Exception e) {}
                       }
                   }
               }
           }
           EOF
           
-          # 5. Start Build with all fixes applied
+          # 5. Start Build
           gradle assembleDebug --no-daemon --stacktrace --init-script compose-fix.gradle
 
       - name: Upload APK
